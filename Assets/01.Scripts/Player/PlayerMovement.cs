@@ -4,123 +4,77 @@ using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour
 {
-    [Header("Movement")]
-    public float moveSpeed;
+	[SerializeField]
+	private Transform orientation;
 
-    public float groundDrag;
+	[SerializeField]
+	private float moveSpeed = 5f;
+	[SerializeField]
+	private float jumpPower;
+	[SerializeField]
+	private float gravity;
 
-    public float jumpForce;
-    public float jumpCooldown;
-    public float airMultiplier;
-    private bool readyToJump;
+    private CharacterController charController;
 
-    [HideInInspector] public float walkSpeed;
-    [HideInInspector] public float sprintSpeed;
+	private Vector3 inputVelocity;
+	private Vector3 moveVelocity;
+	[SerializeField]
+	private float verticalMove;
 
-    [Header("Keybinds")]
-    public KeyCode jumpKey = KeyCode.Space;
-
-    [Header("Ground Check")]
-    public float playerHeight;
-    public LayerMask whatIsGround;
-    bool grounded;
-
-    public Transform orientation;
-
-    float horizontalInput;
-    float verticalInput;
-
-    Vector3 moveDirection;
-
-    Rigidbody rb;
-
-    private void Start()
-    {
-        rb = GetComponent<Rigidbody>();
-        rb.freezeRotation = true;
-
-        readyToJump = true;
-    }
-
-    private void Update()
-    {
-        // ground check
-        grounded = Physics.Raycast(transform.position, Vector3.down, playerHeight * 0.5f + 0.3f, whatIsGround);
-
-        MyInput();
-        SpeedControl();
-
-        // handle drag
-        if (grounded && !Input.GetKey(jumpKey))
-            rb.drag = groundDrag;
-        else
-            rb.drag = 0;
-    }
-
-    private void FixedUpdate()
-    {
-        MovePlayer();
-    }
-
-    private void MyInput()
-    {
-        // when to jump
-        if (Input.GetKey(jumpKey) && readyToJump && grounded)
-        {
-            readyToJump = false;
-
-            Jump();
-
-            StartCoroutine(ResetJump());
-            return;
-        }
-
-        if (grounded && !Input.GetKey(jumpKey))
-		{
-            horizontalInput = Input.GetAxisRaw("Horizontal");
-            verticalInput = Input.GetAxisRaw("Vertical");
-        }
-    }
-
-    private void MovePlayer()
-    {
-        // calculate movement direction
-        if (grounded && !Input.GetKey(jumpKey))
-            moveDirection = orientation.forward * verticalInput + orientation.right * horizontalInput;
-
-        // on ground
-        if (grounded && !Input.GetKey(jumpKey))
-            rb.AddForce(moveDirection.normalized * moveSpeed * 10f, ForceMode.Force);
-
-        // in air
-        //else if (!grounded)
-            //rb.AddForce(moveDirection.normalized * moveSpeed * 10f * airMultiplier, ForceMode.Force);
-    }
-
-    private void SpeedControl()
-    {
-        Vector3 flatVel = new Vector3(rb.velocity.x, 0f, rb.velocity.z);
-
-        // limit velocity if needed
-        if (flatVel.magnitude > moveSpeed)
-        {
-            Vector3 limitedVel = flatVel.normalized * moveSpeed;
-            rb.velocity = new Vector3(limitedVel.x, rb.velocity.y, limitedVel.z);
-        }
-    }
-
-    private void Jump()
-    {
-        // reset y velocity
-        rb.velocity = new Vector3(rb.velocity.x, 0f, rb.velocity.z);
-
-        rb.AddForce(transform.up * jumpForce, ForceMode.Impulse);
-    }
-
-    private IEnumerator ResetJump()
+	private void Awake()
 	{
-        yield return new WaitForSeconds(jumpCooldown);
+		charController = GetComponent<CharacterController>();
+	}
 
-        readyToJump = true;
+	private void FixedUpdate()
+	{
+		// 떠있을 때, 점프가 입력 되었을 때 중력 적용
+		if (charController.isGrounded == false || verticalMove > 0)
+		{
+			verticalMove -= gravity * Time.fixedDeltaTime;
+		}
+		else
+		{
+			verticalMove = -0.01f;
+		}
+
+		// 최종적으로 움직일 방향 계산
+		Vector3 move = new Vector3(moveVelocity.x, verticalMove, moveVelocity.z);
+		// 부드러운 움직임
+		Vector3 n = Vector3.Lerp(charController.velocity, move, 0.1f) * Time.fixedDeltaTime;
+		n.y = verticalMove;
+		charController.Move(n);
+	}
+
+	private void Update()
+	{
+		// 움직임 키 입력
+		float horizontal = Input.GetAxisRaw("Horizontal");
+		float vertical = Input.GetAxisRaw("Vertical");
+		Vector3 moveDir = orientation.forward * vertical + orientation.right * horizontal;
+		Move(moveDir);
+
+		// 점프 키 입력
+		if (Input.GetKey(KeyCode.Space) && charController.isGrounded)
+		{
+			verticalMove = jumpPower;
+		}
+
+		// 공중에 떠있을 때 충돌 등으로 인한 속도변화를 반영
+		if (!charController.isGrounded)
+		{
+			moveVelocity = new Vector3(charController.velocity.x, 0, charController.velocity.z);
+		}
+	}
+
+	private void Move(Vector3 direction)
+	{
+		// 착지했을 때와 점프키가 눌리지 않았을 때만 입력 받음
+		if (charController.isGrounded && !Input.GetKey(KeyCode.Space))
+		{
+			inputVelocity = direction.normalized;
+			moveVelocity = inputVelocity * moveSpeed;
+		}
+
 	}
 }
